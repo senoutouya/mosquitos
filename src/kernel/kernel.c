@@ -81,18 +81,22 @@ void kernel_main(KernelInfo info) {
   timer_init();
   keyboard_controller_init();
 
+  text_output_printf("smx7\n");
   // Set up random numbers and start collecting entropy
   random_init();
 
   // Set up scheduler
   scheduler_init();
 
+  text_output_printf("smx8\n");
   KernelThread *main_thread = thread_create(kernel_main_thread, NULL, 31, 4);
   thread_start(main_thread);
 
+  text_output_printf("smx9\n");
   // kernel_main will not execute any more after this call
   scheduler_start_scheduling();
 
+  text_output_printf("smx10\n");
   assert(false);  // We should never get here
 }
 
