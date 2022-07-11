@@ -1,7 +1,0 @@
-include_rules
-
-# Since this is a 3rd party library, disable warnings and Werror
-CFLAGS += -Wno-error -w
-
-: foreach *.c |> !cc |> %B.o
-: foreach *.s |> !cc |> %B_asm.o
