@@ -53,26 +53,22 @@ static void setup_scheduler_timer() {
 }
 
 void *idle_thread_main(void *p UNUSED) {
-  while (1) __asm__("hlt");
+	while (1)
+		__asm__("hlt");
   return NULL;
 }
 
 void scheduler_init() {
-  text_output_printf("smx7-0\n");
   REQUIRE_MODULE("virtual_memory");
   REQUIRE_MODULE("timer");
 
-  text_output_printf("smx7-0-1\n");
   list_init(&scheduler_data.thread_list);
 
-  text_output_printf("smx7-1\n");
   scheduler_data.current_thread = NULL;
 
   // The idle thread is the thread that runs if we have nothing else to do
   KernelThread *idle_thread = thread_create(idle_thread_main, NULL, 0, 1);
-  text_output_printf("smx7-2\n");
   thread_start(idle_thread);
-  text_output_printf("smx7-3\n");
 
   calibrate_apic_timer();
 

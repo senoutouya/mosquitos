@@ -26,7 +26,7 @@ PCIDeviceDriverError satapi_scsi_command(uint8_t *command, uint8_t command_size,
                                                             buffer, true, command);
   command_fis->command = ATAPI_CMD_PACKET;
 
-  return ahci_issue_command(device, slot) ? PCI_ERROR_NONE : PCI_ERROR_DEVICE_ERROR;
+  return ahci_issue_command(device, slot, "satapi_scsi_command", command[0]) ? PCI_ERROR_NONE : PCI_ERROR_DEVICE_ERROR;
 }
 
 PCIDeviceDriverError satapi_read(PCIDeviceDriver *ahci_driver, AHCIDevice *device, uint64_t address,
@@ -83,7 +83,7 @@ static PCIDeviceDriverError satapi_identify(PCIDeviceDriver *ahci_driver, AHCIDe
                                                             false, NULL);
   command_fis->command = ATAPI_CMD_IDENTIFY;
   
-  return ahci_issue_command(device, slot) ? PCI_ERROR_NONE : PCI_ERROR_DEVICE_ERROR;
+  return ahci_issue_command(device, slot, "satapi_identify", command_fis->command) ? PCI_ERROR_NONE : PCI_ERROR_DEVICE_ERROR;
 }
 
 PCIDeviceDriverError satapi_capacity(AHCIDevice *device, uint64_t *num_sectors,

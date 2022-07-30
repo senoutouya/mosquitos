@@ -165,7 +165,10 @@ ACPI_STATUS AcpiOsWriteMemory(ACPI_PHYSICAL_ADDRESS address, UINT64 value,
 
     case 8:
       *(uint8_t *)address = value;
-      break;
+	  break;
+	default:
+		assert(!"AcpiOsWriteMemory invalid width");
+		break;
   }
 
   return AE_OK;
@@ -184,7 +187,10 @@ ACPI_STATUS AcpiOsReadPort(ACPI_IO_ADDRESS address, UINT32 *value,
 
     case 8:
       *value = io_read_8(address) & BOTTOM_N_BITS_ON(width);
-      break;
+	  break;
+	default:
+		assert(!"AcpiOsReadPort invalid width");
+		break;
   }
 
   return AE_OK;
@@ -204,6 +210,9 @@ ACPI_STATUS AcpiOsWritePort(ACPI_IO_ADDRESS address, UINT32 value,
     case 8:
       io_write_8(address, value);
       break;
+    default:
+        assert(!"AcpiOsWritePort invalid width");
+        break;
   }
 
   return AE_OK;

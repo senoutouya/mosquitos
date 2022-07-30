@@ -16,7 +16,7 @@ struct waiting_thread {
   uint64_t wake_time;
 };
 
-static struct {
+static volatile struct {
   volatile uint64_t ticks; // Won't overflow for 5e8 ticks
   uint64_t cycles_per_tick;
   List waiting_threads;
@@ -57,7 +57,7 @@ void timer_init() {
 
   // Use Legacy PIC Timer
   // TODO: Use HPET eventually
-  io_write_8(0x43, 0x68);
+  io_write_8(0x43, 0b00110100);
 
   // Set up timer to have frequency TIMER_FREQUENCY
   io_write_8(0x40, TIMER_DIVIDER & 0xff);

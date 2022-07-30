@@ -47,7 +47,7 @@ void random_init() {
   REQUIRE_MODULE("cpuid");
   random_data.have_rdseed = cpuid_has_extended_capability(CPUID_EXCAP_RDSEED);
   random_data.have_tsc = cpuid_has_capability(CPUID_CAP_TSC);
-  assert(random_data.have_rdseed || random_data.have_tsc);
+  //assert(random_data.have_rdseed || random_data.have_tsc);
   if (!random_data.have_rdseed) {
     text_output_printf(
         "WARNING: RDSEED not available, random seed quality will suffer.\n");

@@ -9,6 +9,7 @@
 #define PCI_IV 37
 // Something is weird about IV 38...
 #define LOCAL_APIC_CALIBRATION_IV 39
+#define IDE_IV 40
 
 void interrupt_init();
 void interrupt_register_handler(int index, void (*handler)(int));

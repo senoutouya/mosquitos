@@ -41,6 +41,10 @@ void *kernel_main_thread();
 
 Lock kernel_lock;
 
+static void ide_isr() {
+    kprintf("ide_isr ");
+}
+
 // Pre-threaded initialization is done here
 void kernel_main(KernelInfo info) {
   // Disable interrupts as we have no way to handle them now
@@ -79,24 +83,25 @@ void kernel_main(KernelInfo info) {
   vm_init(info.memory_map, info.mem_map_size, info.mem_map_descriptor_size);
 
   timer_init();
+
   keyboard_controller_init();
 
-  text_output_printf("smx7\n");
   // Set up random numbers and start collecting entropy
   random_init();
 
   // Set up scheduler
   scheduler_init();
 
-  text_output_printf("smx8\n");
+// TODO
+  ioapic_map(14, IDE_IV, true, true);
+  interrupt_register_handler(IDE_IV, ide_isr);
+
   KernelThread *main_thread = thread_create(kernel_main_thread, NULL, 31, 4);
   thread_start(main_thread);
 
-  text_output_printf("smx9\n");
   // kernel_main will not execute any more after this call
   scheduler_start_scheduling();
 
-  text_output_printf("smx10\n");
   assert(false);  // We should never get here
 }
 

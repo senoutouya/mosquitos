@@ -1,4 +1,4 @@
-.include "../macros.s"
+.include "macros.s"
 
 .extern interrupts_handlers
 .extern isr_common
@@ -60,3 +60,4 @@ isr_noerror 35
 isr_noerror 36
 isr_noerror 37
 isr_noerror 39
+isr_noerror 40

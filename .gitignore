@@ -4,5 +4,5 @@ build/*
 *.d
 *.so
 src/common/build_info.c
-.tup/*
 .DS_Store
+.vs

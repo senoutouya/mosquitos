@@ -30,6 +30,13 @@ void filesystem_tree_init() {
 
   fs_tree_data.num_filesystems = 0;
 
+  if (pci_find_device(0x01, 0x01, 0x80))
+	  kprintf("found IDE device. TODO: driver 80\n");
+  if (pci_find_device(0x01, 0x01, 0x8A))
+	  kprintf("found IDE device. TODO: driver 8a\n");
+  if (pci_find_device(0x01, 0x01, 0x8F))
+	  kprintf("found IDE device. TODO: driver 8f\n");
+
   PCIDevice *device = pci_find_device(0x01, 0x06, 0x01);
   if (device == NULL || !device->has_driver) {
     return;
@@ -50,6 +57,7 @@ void filesystem_tree_init() {
                                 sizeof(info_request), &info, sizeof(info));
     assert(ahci_error == PCI_ERROR_NONE);
 
+    kprintf("ahci %d %s,%s,%s,%s %x %x\n", info.device_type, info.serial_number, info.firmware_revision, info.media_serial_number, info.model_number, info.logical_sector_size, info.num_sectors);
     if (info.device_type == AHCI_DEVICE_SATA) {
       const MFSSATAInitData initialization_data = {.driver = driver,
                                                    .device_id = i};

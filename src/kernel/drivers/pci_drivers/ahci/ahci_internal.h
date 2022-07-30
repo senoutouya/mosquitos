@@ -20,7 +20,7 @@ FISRegisterH2D * ahci_initialize_command_fis(AHCIDevice *device, int slot, bool 
 void ahci_set_command_fis_lba(FISRegisterH2D *command_fis, uint64_t address, uint64_t block_count);
 
 int ahci_begin_command(AHCIDevice *device);
-bool ahci_issue_command(AHCIDevice *device, int slot);
+bool ahci_issue_command(AHCIDevice *device, int slot, char* str, int cmd);
 
 void ahci_copy_identify_string(uint16_t *identify_buffer, uint8_t offset, uint8_t word_length, 
                                uint8_t *destination);

@@ -44,7 +44,16 @@ static void set_idt_entry(int index, uint64_t isr_address,
 
 void isr_common(uint64_t num, uint64_t error_code) {
   interrupts_handlers[num](error_code);
+if (num < 0xe0) {
   apic_send_eoi_if_necessary(num);
+}
+else
+{
+  // legacy PIC interrupt
+	if (num >= 0xe8) 
+		io_write_8(0xA0, 0x20); // send to slave too
+	io_write_8(0x20, 0x20);
+}
 }
 
 extern void isr0();
@@ -74,11 +83,14 @@ extern void isr35();
 extern void isr36();
 extern void isr37();
 extern void isr39();
+extern void isr40();
 
 // Public functions
 void interrupt_init() {
   REQUIRE_MODULE("gdt");
   REQUIRE_MODULE("apic");
+
+  memset(IDT, 0, sizeof(IDT));
 
   // Exceptions (trap gates)
   set_idt_entry(0, (uint64_t)isr0, TRAP_GATE);
@@ -111,9 +123,10 @@ void interrupt_init() {
   set_idt_entry(PIC_TIMER_IV, (uint64_t)isr36, INTERRUPT_GATE);  // PIC timer
   set_idt_entry(PCI_IV, (uint64_t)isr37, INTERRUPT_GATE);        // PCI ISR
 
+  // Something is weird about IV 38...
   set_idt_entry(LOCAL_APIC_CALIBRATION_IV, (uint64_t)isr39,
                 INTERRUPT_GATE);  // Local APIC timer (calibration)
-  // Something is weird about IV 38...
+  set_idt_entry(IDE_IV, (uint64_t)isr40, INTERRUPT_GATE);        // IDE ISR
 
   IDTR.size = sizeof(IDT) - 1;
   IDTR.address = (uint64_t)&IDT[0];

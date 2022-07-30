@@ -9,6 +9,9 @@
 void graphics_init(EFI_GRAPHICS_OUTPUT_PROTOCOL *gop);
 void graphics_clear_screen(uint32_t color);
 void graphics_fill_rect(int x, int y, int w, int h, uint32_t color);
-void graphics_draw_pixel(int x, int y, uint32_t color);
+inline void graphics_draw_pixel(int x, int y, uint32_t color);
+
+uint32_t graphics_resolution_horizon();
+uint32_t graphics_resolution_vert();
 
 #endif

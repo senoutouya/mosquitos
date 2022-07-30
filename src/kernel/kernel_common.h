@@ -19,4 +19,6 @@
 #define STR(s) _STR(s)
 #define _STR(s) #s
 
+#define countof(x) (sizeof(x) / sizeof(x[0]))
+
 #endif

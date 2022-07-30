@@ -19,6 +19,7 @@
 #define MAX_CACHED_DEVICES 8
 
 #define PCI_MASS_STORAGE_CLASS_CODE 0x01
+#define PCI_PATA_SUBCLASS 0x01 // IDE Controller
 #define PCI_SATA_SUBCLASS 0x06
 #define PCI_AHCI_V1_PROGRAM_IF 0x01
 
@@ -239,7 +240,7 @@ void ahci_set_command_fis_lba(FISRegisterH2D *command_fis, uint64_t address,
 }
 
 // Attempt to issue command, true when completed, false if error
-bool ahci_issue_command(AHCIDevice *device, int slot) {
+bool ahci_issue_command(AHCIDevice *device, int slot, char* str, int cmd) {
   HBAPort *port = port_from_device(device);
 
   // Wait until the port is free
@@ -265,8 +266,9 @@ bool ahci_issue_command(AHCIDevice *device, int slot) {
   while (port->command_issue & (1 << slot)) {
     // Sleep until we get an interrupt or we timeout
     if (!semaphore_down(&device->pending_command, 1, COMMAND_TIMEOUT_MS)) {
-      text_output_printf("AHCI command issue timeout.\n");
-      success = false;
+      success = ((port->command_issue & (1 << slot)) == 0);
+      text_output_printf("AHCI %s command %d issue %s.\n", str, cmd,
+	success ? "fin?" : "timeout");
       break;
     }
   }
@@ -300,10 +302,12 @@ static void enumerate_devices(PCIDeviceDriver *driver, HBAMemory *hba,
                               AHCIData *ahci_data) {
   // Check all implemented ports
   uint32_t ports_implemented = hba->ports_implemented;
+        kprintf("ports_implemented %x cap %x\n", ports_implemented, hba->capabilities);
   for (int i = 0; i < 32; ++i) {
     if ((ports_implemented & (1 << i)) > 0) {
       enum AHCIDeviceType device_type = device_type_in_port(&hba->ports[i]);
 
+	  //kprintf("hba->ports[i] %x\n", hba->ports[i].sata_status);
       // Keep track of all ports with devices in them
       if (device_type != AHCI_DEVICE_NONE) {
         assert(ahci_data->num_devices < MAX_CACHED_DEVICES);
@@ -323,6 +327,7 @@ static void enumerate_devices(PCIDeviceDriver *driver, HBAMemory *hba,
           satapi_fill_device_info(driver, new_device);
         } else {
           // TODO: Fill in device info for other device types
+		  kprintf("UNKNOWN device_type %x\n", device_type);
         }
       }
     }
@@ -349,8 +354,13 @@ static enum AHCIDeviceType device_type_in_port(HBAPort *port) {
     case AHCI_SIG_SATA:
       return AHCI_DEVICE_SATA;
     default:
+        kprintf("port->signature %x\n", port->signature);
       return AHCI_DEVICE_UNKNOWN;
   }
+}
+
+static void ide_isr() {
+    kprintf("ide_isr ");
 }
 
 static bool initialize_hba(PCIDeviceDriver *driver) {
@@ -378,7 +388,25 @@ static bool initialize_hba(PCIDeviceDriver *driver) {
          minor_version <=
              3);  // We only know how to deal with ACHI version 1.0 - 1.3
 
-  assert(reset_hba(hba));
+// Supports Staggered Spin-up (SSS)
+	if (hba->capabilities & (1 << 27))
+		assert(reset_hba(hba));
+	else {
+		kprintf("not support CAP.SSS\n");
+//reset_hba(hba);
+//hba->vendor[0x18] |= 0x2;
+}
+	//kprintf("CAP.NP %d\n", hba->capabilities & 0xF); // max ports
+hba->ghc |= 2; // enable interrupt
+	kprintf("GHC %x", hba->ghc);
+	//kprintf("PxIE %x\n", hba->vendor[0x14]); //  PxIE ¨C Port x Interrupt Enable
+hba->vendor[0x14] |= 0x1F;
+hba->vendor[0x12] |= 0x1F;
+hba->ghc |= 2;
+	//kprintf("PxIE %x\n", hba->vendor[0x14]); //  PxIE ¨C Port x Interrupt Enable
+//hba->ghc |= 2;
+	//kprintf("GHC.IE %d\n", hba->ghc & 0x2); // Interrupt Enabled
+	//kprintf("PxCMD.SUD %d\n", hba->vendor[0x18]); // Spin-Up Device
 
   // TODO: We should free this somewhere
   driver->driver_data = kcalloc(1, sizeof(AHCIData));

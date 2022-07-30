@@ -6,7 +6,7 @@
 
 #include <acpi.h>
 
-#define ACPI_MAX_INIT_TABLES 32
+#define ACPI_MAX_INIT_TABLES 256
 
 static struct {
   uint64_t xdsp_address;
@@ -23,13 +23,13 @@ static bool acpica_enable_apic_mode() {
 
   Params.Count = 1;
   Params.Pointer = &Obj;
-  
+
   Obj.Type = ACPI_TYPE_INTEGER;
   Obj.Integer.Value = 1;     // 0 = PIC, 1 = APIC
 
   ACPI_STATUS status = AcpiEvaluateObject(NULL, "\\_PIC", &Params, NULL);
   if (ACPI_FAILURE(status)) {
-    text_output_printf("Could not enable APIC mode %s\n", AcpiFormatException(status));
+    text_output_printf("Could not enable APIC mode: %s\n", AcpiFormatException(status));
     return false;
   }
 
@@ -40,7 +40,7 @@ static bool acpica_early_init() {
   ACPI_STATUS status;
 
   if (ACPI_FAILURE(status = AcpiInitializeTables(acpi.acpi_tables, ACPI_MAX_INIT_TABLES, FALSE))) {
-    text_output_printf("ACPI INIT tables failure %s\n", AcpiFormatException(status));
+    text_output_printf("ACPI INIT tables failure: %s\n", AcpiFormatException(status));
     return false;
   }
 
@@ -74,7 +74,7 @@ static bool acpica_enable() {
     return false;
   }
 
-  if (!acpica_enable_apic_mode()) return false;
+  acpica_enable_apic_mode(); // should ignore error?
 
   if (ACPI_FAILURE(status = AcpiInitializeObjects(ACPI_FULL_INITIALIZATION))) {
     text_output_printf("ACPI init objects failure %s\n", AcpiFormatException(status));

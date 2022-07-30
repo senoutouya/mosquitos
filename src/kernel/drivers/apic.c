@@ -49,6 +49,25 @@ typedef struct {
   uint32_t irq_base;
 } __attribute__((packed)) IOAPICHeader;
 
+typedef struct acpi_madt_interrupt_override
+{
+    CommonMADTEntryHeader    Header;
+    uint8_t                   Bus;                /* 0 - ISA */
+    uint8_t                   SourceIrq;          /* Interrupt source (IRQ) */
+    uint32_t                  GlobalIrq;          /* Global system interrupt */
+    uint16_t                  IntiFlags;
+
+} ACPI_MADT_INTERRUPT_OVERRIDE;
+
+typedef struct acpi_madt_local_apic_nmi
+{
+    CommonMADTEntryHeader    Header;
+    uint8_t                   ProcessorId;        /* ACPI processor id */
+    uint16_t                  IntiFlags;
+    uint8_t                   Lint;               /* LINTn to which NMI is connected */
+
+} ACPI_MADT_LOCAL_APIC_NMI;
+
 typedef union {
   struct {
     uint8_t interrupt_vector;
@@ -153,13 +172,16 @@ static bool load_ioapic_address() {
 
   bool found = false;
   uint32_t position = sizeof(MADT);
+  kprintf("APIC %s OEM %s %s, flag %d addr %x\n", madt->header.Signature,
+madt->header.OEMID, madt->header.OEMTableID, madt->flags, madt->local_controller_address);
   while (position < madt->header.Length) {
     const uint8_t *const madt_buffer = (const uint8_t *)madt;
     const CommonMADTEntryHeader *const entry =
         (const CommonMADTEntryHeader *)(madt_buffer + position);
-
+	
     if (entry->device_type == 1) {
-      const IOAPICHeader *const header = (const IOAPICHeader *)entry;
+		const IOAPICHeader* const header = (const IOAPICHeader*)entry;
+		kprintf("IOAPIC addr %x gsi_base %x. ", header->address, header->irq_base);
 
       assert(header->irq_base == 0);
 
@@ -169,6 +191,23 @@ static bool load_ioapic_address() {
         ioapic_data = (uint32_t *)(intptr_t)(header->address + 0x10);
       }
     }
+	else if (entry->device_type == 0) {
+		const LocalAPICHeader* const header = (const LocalAPICHeader*)entry;
+
+		//kprintf("LocalAPIC proc %x apic %x flag %x. ", header->processor_id, header->apic_id, header->flags);
+	}
+	else if (entry->device_type == 2) {
+		const ACPI_MADT_INTERRUPT_OVERRIDE* header = (const ACPI_MADT_INTERRUPT_OVERRIDE*)entry;
+
+		kprintf("Override bus %x src IRQ#%x to #%x inti %x. ",
+		header->Bus, header->SourceIrq, header->GlobalIrq, header->IntiFlags);
+	}
+	else if (entry->device_type == 4) {
+		const ACPI_MADT_LOCAL_APIC_NMI* header = (const ACPI_MADT_LOCAL_APIC_NMI*)entry;
+		//kprintf("NMI proc %x inti %x lint %x. ", header->ProcessorId, header->IntiFlags, header->Lint);
+	}
+else
+	kprintf("unknown device_type %d. ", entry->device_type);
 
     position += entry->length;
   }
@@ -193,7 +232,7 @@ void apic_init() {
   io_write_8(PIC1_DATA, 0xe0);
   io_write_8(PIC2_DATA, 0xe8);
 
-  // Set ICW3
+  // Set ICW3, connecting master & slave
   io_write_8(PIC1_DATA, 4);
   io_write_8(PIC2_DATA, 2);
 

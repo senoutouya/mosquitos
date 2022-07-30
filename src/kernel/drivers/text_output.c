@@ -56,17 +56,16 @@ static void text_output_draw_char(char c, int x, int y) {
   int pixel_x = x * kCharacterWidth;
   int pixel_y = y * kCharacterHeight;
 
-  int font_char_index;
-
-  if (c >= ' ' && c <= '~') {
-    font_char_index = c - ' ';
-  } else {
-    return; // We cannot print this character
-  }
+  int font_char_index = c;
 
   for (int i = 0; i < kCharacterWidth; ++i) {
     for (int j = 0; j < kCharacterHeight; ++j) {
-      uint32_t color = (font[j + font_char_index * kCharacterHeight] & (1 << (7-i))) == 0 ? text_output_data.background_color : text_output_data.foreground_color;
+      uint32_t color = font_greyscale[i + (font_char_index * kCharacterHeight + j) * kCharacterWidth];
+      uint32_t R = (256-color) * (text_output_data.background_color & 0xFF0000) + color * (text_output_data.foreground_color & 0xFF0000) / 256;
+      uint32_t G = (256-color) * (text_output_data.background_color & 0xFF00) + color * (text_output_data.foreground_color & 0xFF00) / 256;
+      uint32_t B = (256-color) * (text_output_data.background_color & 0xFF) + color * (text_output_data.foreground_color & 0xFF) / 256;
+      color = (R & 0xFF0000) + (G & 0xFF00) + (B & 0xFF);
+      //color /= 256;
       graphics_draw_pixel(pixel_x + i, pixel_y + j, color);
     }
   }
@@ -91,16 +90,17 @@ void text_output_backspace() {
 inline void text_output_putchar(const char c) {
   // lock_acquire(&text_output_data.lock, -1);
 
-  if (c == '\n') {
-    text_output_data.current_row += 2; // Put an empty line between text lines
+  if (c == '\n' || (text_output_data.current_col + 1) * kCharacterWidth >= graphics_resolution_horizon()) {
+    text_output_data.current_row += 1;
 
-    if (text_output_data.current_row >= 100) {
+    if (text_output_data.current_row * kCharacterHeight >= graphics_resolution_vert()) {
       text_output_clear_screen();
       text_output_data.current_row = kTextOutputPadding;
     }
 
     text_output_data.current_col = kTextOutputPadding;
-  } else{
+  } 
+  if (c != '\n') {
     text_output_draw_char(c, text_output_data.current_col, text_output_data.current_row);
     text_output_data.current_col += 1;
   }

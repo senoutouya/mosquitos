@@ -20,4 +20,5 @@ int text_output_vprintf(const char *format, va_list arg_list);
 void text_output_safe_printf(const char *format, ...);
 void text_output_safe_vprintf(const char *format, va_list arg_list);
 
+#define kprintf text_output_printf
 #endif

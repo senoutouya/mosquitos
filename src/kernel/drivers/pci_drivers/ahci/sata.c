@@ -39,7 +39,7 @@ PCIDeviceDriverError sata_rw_command(bool write, AHCIDevice *device,
 
   ahci_set_command_fis_lba(command_fis, address, block_count);
 
-  return ahci_issue_command(device, slot) ? PCI_ERROR_NONE
+  return ahci_issue_command(device, slot, "sata_rw_command", command_fis->command) ? PCI_ERROR_NONE
                                           : PCI_ERROR_DEVICE_ERROR;
 }
 
@@ -76,7 +76,7 @@ static PCIDeviceDriverError sata_identify(PCIDeviceDriver *ahci_driver,
   command_fis->command = ATA_CMD_IDENTIFY;
   command_fis->device = 0;
 
-  return ahci_issue_command(device, slot) ? PCI_ERROR_NONE
+  return ahci_issue_command(device, slot, "sata_identify", command_fis->command) ? PCI_ERROR_NONE
                                           : PCI_ERROR_DEVICE_ERROR;
 }
 
