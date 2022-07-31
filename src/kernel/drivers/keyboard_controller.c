@@ -77,5 +77,6 @@ void keyboard_controller_init() {
   interrupt_register_handler(KEYBOARD_IV, keyboard_isr);
   ioapic_map(KEYBOARD_IRQ, KEYBOARD_IV, false, false);
 
+  io_read_8(0x60); // in case keyboard IRQ already triggered.
   REGISTER_MODULE("keyboard_controller");
 }
