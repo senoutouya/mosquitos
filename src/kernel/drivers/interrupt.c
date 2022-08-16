@@ -84,6 +84,15 @@ extern void isr36();
 extern void isr37();
 extern void isr39();
 extern void isr40();
+extern void isr0xe0();
+extern void isr0xe1();
+extern void isr0xe2();
+extern void isr0xe9();
+
+void isr_pic(int errcode)
+{
+//kprintf("isr_pic %d ", apic_current_irq());
+}
 
 // Public functions
 void interrupt_init() {
@@ -126,7 +135,15 @@ void interrupt_init() {
   // Something is weird about IV 38...
   set_idt_entry(LOCAL_APIC_CALIBRATION_IV, (uint64_t)isr39,
                 INTERRUPT_GATE);  // Local APIC timer (calibration)
-  set_idt_entry(IDE_IV, (uint64_t)isr40, INTERRUPT_GATE);        // IDE ISR
+  //set_idt_entry(IDE_IV, (uint64_t)isr40, INTERRUPT_GATE);        // IDE ISR
+  set_idt_entry(0xe0, (uint64_t)isr0xe0, INTERRUPT_GATE);        
+  set_idt_entry(0xe1, (uint64_t)isr0xe1, INTERRUPT_GATE);        
+  set_idt_entry(0xe2, (uint64_t)isr0xe2, INTERRUPT_GATE);        
+  set_idt_entry(0xe9, (uint64_t)isr0xe9, INTERRUPT_GATE);        
+interrupt_register_handler(0xe0, isr_pic);     
+interrupt_register_handler(0xe1, isr_pic);     
+interrupt_register_handler(0xe2, isr_pic);     
+interrupt_register_handler(0xe9, isr_pic);
 
   IDTR.size = sizeof(IDT) - 1;
   IDTR.address = (uint64_t)&IDT[0];

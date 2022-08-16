@@ -37,6 +37,101 @@ static struct {
   bool use_gsi; // TODO: smx find better ways to determine IRQs
 } pci_data;
 
+static void pci_isr();
+#define DEF_ISR_N(n) \
+    void isr_pool_##n(void) { kprintf("isr_pool(%d)", n); pci_isr(); }
+
+DEF_ISR_N(0);
+DEF_ISR_N(1);
+DEF_ISR_N(2);
+DEF_ISR_N(3);
+DEF_ISR_N(4);
+DEF_ISR_N(5);
+DEF_ISR_N(6);
+DEF_ISR_N(7);
+DEF_ISR_N(8);
+DEF_ISR_N(9);
+DEF_ISR_N(10);
+DEF_ISR_N(11);
+DEF_ISR_N(12);
+DEF_ISR_N(13);
+DEF_ISR_N(14);
+DEF_ISR_N(15);
+DEF_ISR_N(16);
+DEF_ISR_N(17);
+DEF_ISR_N(18);
+DEF_ISR_N(19);
+DEF_ISR_N(20);
+DEF_ISR_N(21);
+DEF_ISR_N(22);
+DEF_ISR_N(23);
+DEF_ISR_N(24);
+DEF_ISR_N(25);
+DEF_ISR_N(26);
+DEF_ISR_N(27);
+DEF_ISR_N(28);
+DEF_ISR_N(29);
+DEF_ISR_N(30);
+DEF_ISR_N(31);
+DEF_ISR_N(32);
+DEF_ISR_N(33);
+DEF_ISR_N(34);
+DEF_ISR_N(35);
+DEF_ISR_N(36);
+DEF_ISR_N(37);
+DEF_ISR_N(38);
+DEF_ISR_N(39);
+DEF_ISR_N(40);
+
+#define FUNC_ISR_N(n)    isr_pool_##n
+
+void (*isr_pool[256])(void) =
+{
+	FUNC_ISR_N(0),
+	FUNC_ISR_N(1),
+	FUNC_ISR_N(2),
+	FUNC_ISR_N(3),
+	FUNC_ISR_N(4),
+	FUNC_ISR_N(5),
+	FUNC_ISR_N(6),
+	FUNC_ISR_N(7),
+	FUNC_ISR_N(8),
+	FUNC_ISR_N(9),
+	FUNC_ISR_N(10),
+	FUNC_ISR_N(11),
+	FUNC_ISR_N(12),
+	FUNC_ISR_N(13),
+	FUNC_ISR_N(14),
+	FUNC_ISR_N(15),
+	FUNC_ISR_N(16),
+	FUNC_ISR_N(17),
+	FUNC_ISR_N(18),
+	FUNC_ISR_N(19),
+	FUNC_ISR_N(20),
+	FUNC_ISR_N(21),
+	FUNC_ISR_N(22),
+	FUNC_ISR_N(23),
+	FUNC_ISR_N(24),
+	FUNC_ISR_N(25),
+	FUNC_ISR_N(26),
+	FUNC_ISR_N(27),
+	FUNC_ISR_N(28),
+	FUNC_ISR_N(29),
+	FUNC_ISR_N(30),
+	FUNC_ISR_N(31),
+	FUNC_ISR_N(32),
+	FUNC_ISR_N(33),
+	FUNC_ISR_N(34),
+	FUNC_ISR_N(35),
+	FUNC_ISR_N(36),
+	FUNC_ISR_N(37),
+	FUNC_ISR_N(38),
+	FUNC_ISR_N(39),
+	FUNC_ISR_N(40)
+};
+
+extern int g_dma_buf_idx;
+extern uint16_t* g_dma_buf[200];
 // TODO: Try to set up MSI again
 static void pci_isr() {
 kprintf("pci isr%d.", apic_current_irq());
@@ -44,9 +139,14 @@ kprintf("pci isr%d.", apic_current_irq());
     PCIDevice *device = &pci_data.devices[i];
 
     if (device->has_interrupts && device->has_driver) {
+		kprintf("pci slot%x,", device->slot);
       device->driver.isr(&device->driver);
     }
   }
+for (int i = 0; i < g_dma_buf_idx; ++i)
+{
+	kprintf("dma %s,", g_dma_buf[i]+10);
+}
 }
 
 uint32_t pci_config_read_word(uint8_t bus, uint8_t slot, uint8_t func,
@@ -214,7 +314,7 @@ static void pci_load_irq_routing_table() {
 
 UNUSED static void print_pci_device(PCIDevice *device) {
   text_output_printf(
-      "[PCI %02X:%02X:%02X] Class Code: %02X:%02X:%02X, %sIRQ#%d, %s\n",
+      "[PCI %02X:%02X.%02X] Class Code: %02X:%02X:%02X, %sIRQ#%d, %s\n",
       device->bus, device->slot, device->function, device->class_code,
       device->subclass, device->program_if,
 	device->has_interrupts ? "" : "No", device->real_irq,
@@ -234,7 +334,7 @@ static PCIDeviceDriver *driver_for_device(PCIDevice *device) {
   return NULL;
 }
 
-static PCIDevice *add_pci_device(uint8_t bus, uint8_t slot, uint8_t function, int depth) {
+static PCIDevice *add_pci_device(uint8_t bus, uint8_t slot, uint8_t function, int root, int depth) {
   uint32_t vendor_word =
       PCI_HEADER_READ_FIELD_WORD(bus, slot, function, vendor_id);
   if (PCI_HEADER_FIELD_IN_WORD(vendor_word, vendor_id) != 0xffff) {
@@ -266,22 +366,32 @@ static PCIDevice *add_pci_device(uint8_t bus, uint8_t slot, uint8_t function, in
 	uint8_t interrupt_line =
 		PCI_HEADER_FIELD_IN_WORD(interrupt_field, interrupt_line);
 
-    if (slot < 2 || bus > 0)
-      text_output_printf("Loading incorrect IRQ: %i, %i\n", slot, bus);
     assert(interrupt_pin <= PCI_NUM_INTERRUPT_PORTS);
     if (interrupt_pin == 0) {
       new_device->has_interrupts = 0;
     } else {
       new_device->has_interrupts = 1;
 
-	// calculate pin of the root bus, because PCI slots are daisy-chained
-      int pin_offset = (depth + (interrupt_pin - 1)) % PCI_NUM_INTERRUPT_PORTS;  // INTA# is 0x01
-      new_device->real_irq = pci_data.irq_routing_table[slot][pin_offset];
+	// calculate pin of the root bus slot, because PCI slots are daisy-chained
+      int pin_offset = (depth * slot + (interrupt_pin - 1)) % PCI_NUM_INTERRUPT_PORTS;  // INTA# is 0x01
+      new_device->real_irq = pci_data.irq_routing_table[root][pin_offset]; // bugfix: curent slot may not exist in \_PRT, find from root
     }
 
+    uint32_t command_field =
+        PCI_HEADER_READ_FIELD_WORD(bus, slot, function, command);
+    uint16_t pci_command = PCI_HEADER_FIELD_IN_WORD(command_field, command);
+    uint16_t pci_status = PCI_HEADER_FIELD_IN_WORD(command_field, status);
+
+// TODO: decide command flags
+pci_command &= ~2;
+pci_config_write_word(bus, slot, function, PCI_OFFSET_FOR_HDR_FIELD(command), pci_command | 0xFFFF0000);
+pci_command |= 2;
+pci_config_write_word(bus, slot, function, PCI_OFFSET_FOR_HDR_FIELD(command), pci_command | 0xFFFF0000);
+command_field = PCI_HEADER_READ_FIELD_WORD(bus, slot, function, command);
+
     PCIDeviceDriver *driver = driver_for_device(new_device);
-	text_output_printf("PCI %X:%X:%X Class %02X:%02X:%02X Vendor %X:%X %s %s#%d pin%d #%X\n", 
-        bus, slot, function,
+	text_output_printf("PCI %X:%X.%X(c%xs%x->%x) Class %02X:%02X:%02X Vendor %X:%X %s %s#%d pin%d #%X\n", 
+        bus, slot, function, pci_command, pci_status, command_field,
 		new_device->class_code, new_device->subclass, new_device->program_if,
         PCI_HEADER_FIELD_IN_WORD(vendor_word, vendor_id),
 		PCI_HEADER_FIELD_IN_WORD(vendor_word, device_id),
@@ -307,10 +417,21 @@ static PCIDevice *add_pci_device(uint8_t bus, uint8_t slot, uint8_t function, in
 		uint32_t secondary_bus = ((busnumber_field >> 8) & 0xFF);
         assert(bus == primary_bus);
 
-        pci_enumerate_devices_internal(secondary_bus, ++depth);
+        pci_enumerate_devices_internal(secondary_bus, root, ++depth); // TODO: move after driver init
     }
     else
         kprintf("Unknown BUS Type %x\n", new_device->header_type);
+
+	uint32_t cap_field =
+		PCI_HEADER_READ_FIELD_WORD(bus, slot, function, capability_pointer);
+	uint8_t cap_pointer =
+		PCI_HEADER_FIELD_IN_WORD(cap_field, capability_pointer);
+	while (cap_pointer)
+	{
+		uint32_t caplist_field = pci_config_read_word(bus, slot, function, cap_pointer);
+		kprintf("cap %x=%x, ", cap_pointer, caplist_field);
+		cap_pointer = (caplist_field >> 8) & 0xFF;
+	}
 
     if (driver != NULL) {
       text_output_printf("Loading PCI driver \"%s\"...\n", driver->driver_name);
@@ -336,27 +457,71 @@ static PCIDevice *add_pci_device(uint8_t bus, uint8_t slot, uint8_t function, in
   return NULL;
 }
 
-void pci_enumerate_devices_internal(int bus, int depth) {
+void pci_enumerate_devices_internal(int bus, int root, int depth) {
 	if (depth >= PCI_MAX_BUS_NUM)
 		return 0;
 
 	for (int slot = 0; slot < PCI_MAX_SLOT_NUM; slot++) {
-		PCIDevice* new_device = add_pci_device(bus, slot, 0, depth);
+		if (depth == 0)
+			root = slot;
+		PCIDevice* new_device = add_pci_device(bus, slot, 0, root, depth);
 
 		if (new_device && new_device->multifunction) {
 			for (int func = 1; func < PCI_MAX_FUNCTION_NUM; ++func) {
-				add_pci_device(bus, slot, func, depth);
+				add_pci_device(bus, slot, func, root, depth);
 			}
 		}
 	}
+}
+
+bool check_device_exist(int bus, int slot, int function) {
+
+  uint32_t vendor_word =
+      PCI_HEADER_READ_FIELD_WORD(bus, slot, function, vendor_id);
+  if (PCI_HEADER_FIELD_IN_WORD(vendor_word, vendor_id) != 0xffff) {
+
+    uint32_t class_field =
+        PCI_HEADER_READ_FIELD_WORD(bus, slot, function, class_code);
+
+    uint32_t class_code = PCI_HEADER_FIELD_IN_WORD(class_field, class_code);
+    uint32_t subclass = PCI_HEADER_FIELD_IN_WORD(class_field, subclass);
+    uint32_t program_if = PCI_HEADER_FIELD_IN_WORD(class_field, program_if);
+
+    uint32_t htype_field =
+        PCI_HEADER_READ_FIELD_WORD(bus, slot, function, header_type);
+
+    uint32_t header_type = PCI_HEADER_FIELD_IN_WORD(htype_field, header_type);
+    uint32_t multifunction = (header_type & (1 << 7)) > 0;
+    header_type = header_type & ~(1 << 7);
+		return true;
+}
+		return false;
 }
 
 void pci_enumerate_devices() {
   REQUIRE_MODULE("pci");
   pci_data.num_devices = 0;
 
-  pci_enumerate_devices_internal(0, 0); // from root
+  pci_enumerate_devices_internal(0, 0, 0); // from root
 	//kprintf("pci_data.num_devices : %d\n", pci_data.num_devices);
+
+	for (int bus = 0; bus < PCI_MAX_BUS_NUM; bus++) {
+		for (int slot = 0; slot < PCI_MAX_SLOT_NUM; slot++) {
+			bool exist = check_device_exist(bus, slot, 0);
+
+			bool detected = false;
+		  for (int i = 0; i < pci_data.num_devices; ++i) {
+			PCIDevice *device = &pci_data.devices[i];
+
+			if (device->bus == bus && device->slot == slot) {
+				detected = true;
+				break;
+			}
+  			}
+			if (exist && !detected)
+				kprintf("WARNING: HIDDEN DEVICE %x:%x.*\n", bus, slot);
+		}
+	}
 }
 
 void pci_init() {

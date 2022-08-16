@@ -719,6 +719,8 @@ static FilesystemError sata_read_blocks(Filesystem *filesystem,
                                         uint64_t num_blocks, void *blocks) {
   MFSData *data = (MFSData *)filesystem->data;
   const uint32_t sector_size = data->device.sata.sector_size;
+  if (sector_size <= 0)
+    return FS_ERROR_DEVICE_ERROR;
   assert(FILESYSTEM_BLOCK_SIZE_BYTES % sector_size == 0);
   if (data->device.sata.driver == NULL) {
     return FS_ERROR_DEVICE_ERROR;
@@ -746,6 +748,9 @@ static FilesystemError sata_write_blocks(Filesystem *filesystem,
                                          const void *blocks) {
   MFSData *data = (MFSData *)filesystem->data;
   const uint32_t sector_size = data->device.sata.sector_size;
+  if (sector_size <= 0)
+    return FS_ERROR_DEVICE_ERROR;
+
   assert(FILESYSTEM_BLOCK_SIZE_BYTES % sector_size == 0);
   if (data->device.sata.driver == NULL) {
     return FS_ERROR_DEVICE_ERROR;
@@ -822,7 +827,8 @@ static FilesystemError mfs_init(Filesystem *filesystem) {
   FilesystemBlock metadata_block;
   FilesystemError error =
       filesystem->read_blocks(filesystem, 0, 1, &metadata_block);
-  if (error != FS_ERROR_NONE) return error;
+  if (error != FS_ERROR_NONE)
+	return error;
 
   MetadataBlock *metadata = UNION_CAST(&metadata_block, MetadataBlock *);
   if (strncmp(metadata->magic, MFS_MAGIC_STRING, sizeof(MFS_MAGIC_STRING)) ==
@@ -832,7 +838,7 @@ static FilesystemError mfs_init(Filesystem *filesystem) {
   } else {
     data->formatted = false;
   }
-
+kprintf("FS BLOCK %s\n", &metadata_block);
   return FS_ERROR_NONE;
 }
 
@@ -873,11 +879,15 @@ static FilesystemError mfs_init_sata(Filesystem *filesystem,
   const PCIDeviceDriverError ahci_error = init->driver->execute_command(
       init->driver, AHCI_COMMAND_DEVICE_INFO, &info_request,
       sizeof(info_request), &info, sizeof(info));
-  if (ahci_error != PCI_ERROR_NONE) return FS_ERROR_DEVICE_ERROR;
-  if (info.device_type != AHCI_DEVICE_SATA) return FS_ERROR_INVALID_PARAMETERS;
-  if (FILESYSTEM_BLOCK_SIZE_BYTES % info.logical_sector_size != 0) {
+  if (ahci_error != PCI_ERROR_NONE)
+	return FS_ERROR_DEVICE_ERROR;
+  if (info.device_type != AHCI_DEVICE_SATA)
+	return FS_ERROR_INVALID_PARAMETERS;
+  if (info.logical_sector_size <= 0)
+	return FS_ERROR_INVALID_PARAMETERS;
+  if (FILESYSTEM_BLOCK_SIZE_BYTES % info.logical_sector_size != 0)
     return FS_ERROR_INVALID_PARAMETERS;
-  }
+
   data->device.sata.sector_size = info.logical_sector_size;
   data->size_blocks =
       info.num_sectors * info.logical_sector_size / FILESYSTEM_BLOCK_SIZE_BYTES;

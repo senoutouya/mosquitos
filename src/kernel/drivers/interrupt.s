@@ -61,3 +61,7 @@ isr_noerror 36
 isr_noerror 37
 isr_noerror 39
 isr_noerror 40
+isr_noerror 0xe0
+isr_noerror 0xe1
+isr_noerror 0xe2
+isr_noerror 0xe9

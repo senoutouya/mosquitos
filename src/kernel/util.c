@@ -14,7 +14,7 @@ void _panic(char *format, ...) {
   va_end(arg_list);
 
   text_output_printf("\n");
-  print_stack_trace();
+  print_stack_trace(); // TODO: smx
 
   __asm__ ("cli \n\t hlt");
 }

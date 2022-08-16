@@ -16,7 +16,7 @@
 
 // TOOD: Make sure we don't use PCI/SATA MMIO/DMA space for other stuff
 
-#define MAX_CACHED_DEVICES 8
+#define MAX_CACHED_DEVICES 32
 
 #define PCI_MASS_STORAGE_CLASS_CODE 0x01
 #define PCI_PATA_SUBCLASS 0x01 // IDE Controller
@@ -274,7 +274,7 @@ bool ahci_issue_command(AHCIDevice *device, int slot, char* str, int cmd) {
   }
 
   if (port->sata_error != 0) {
-    text_output_printf("AHCI Error: 0b%b\n", port->sata_error);
+    text_output_printf("AHCI Error: %x\n", port->sata_error);
     success = false;
   }
 
@@ -290,6 +290,7 @@ bool ahci_issue_command(AHCIDevice *device, int slot, char* str, int cmd) {
 
 static bool reset_hba(HBAMemory *hba) {
   hba->ghc |= (1 << 0);                             // Reset HBA
+	kprintf("wait for hba reset... ");
   while (hba->ghc & 0x01) __asm__ volatile("nop");  // Wait for reset
 
   hba->ghc |= (1 << 31);  // Enable ACHI mode
@@ -298,16 +299,44 @@ static bool reset_hba(HBAMemory *hba) {
   return (hba->ghc & 0x01) == 0;
 }
 
-static void enumerate_devices(PCIDeviceDriver *driver, HBAMemory *hba,
+static void enumerate_devices(PCIDeviceDriver *driver, volatile HBAMemory *hba,
                               AHCIData *ahci_data) {
   // Check all implemented ports
   uint32_t ports_implemented = hba->ports_implemented;
         kprintf("ports_implemented %x cap %x\n", ports_implemented, hba->capabilities);
   for (int i = 0; i < 32; ++i) {
     if ((ports_implemented & (1 << i)) > 0) {
+
+		hba->ports[i].command &= ~1; // ~ST
+		while (hba->ports[i].command & (1<<15)) ; // wait PxCMD.CR
+		hba->ports[i].command &= ~(1<<4); // ~PxCMD.FRE
+		while (hba->ports[i].command & (1<<14)) ; // wait PxCMD.FR
+
+		// issue phy reset
+		hba->ports[i].sata_control = (hba->ports[i].sata_control & 0x0f0) | 0x304;
+
+		hba->ports[i].sata_control = (hba->ports[i].sata_control & 0x0f0) | 0x301; // PxSCTL.DET
+  hba->ports[i].command |= (1 << 1);          // SUD
+  hba->ports[i].command |= (1 << 2);          // POD
+
+		timer_thread_sleep(100);
+		// reset finish
+		hba->ports[i].sata_control = (hba->ports[i].sata_control & 0x0f0) | 0x300;
+
+	uint32_t port_cmd = hba->ports[i].command & 0xfffffff;
+	port_cmd |= 0x10000000; // PxCMD.ICC
+	hba->ports[i].command = port_cmd;
+		hba->ports[i].sata_error = ALL_ONES;
+		hba->ports[i].interrupt_status = ALL_ONES;
+  hba->ports[i].command |= (1 << 4);          // Enable FIS receiving
+  hba->ports[i].command |= (1 << 0);          // Start port
+
+	  kprintf("hba->ports[%d] IE %x PxCMD %x PxSSTS %x PxSCTL %x PxSERR %x \n", i,
+		hba->ports[i].interrupt_enable, hba->ports[i].command, hba->ports[i].sata_status, 
+		hba->ports[i].sata_control, hba->ports[i].sata_error);
+
       enum AHCIDeviceType device_type = device_type_in_port(&hba->ports[i]);
 
-	  //kprintf("hba->ports[i] %x\n", hba->ports[i].sata_status);
       // Keep track of all ports with devices in them
       if (device_type != AHCI_DEVICE_NONE) {
         assert(ahci_data->num_devices < MAX_CACHED_DEVICES);
@@ -379,34 +408,43 @@ static bool initialize_hba(PCIDeviceDriver *driver) {
 
   uint32_t abar_word = pci_config_read_word(hba_device->bus, hba_device->slot,
                                             hba_device->function, 0x24);
-  uintptr_t hba_base_address = (abar_word & FIELD_MASK(19, 13));
-  HBAMemory *hba = (HBAMemory *)hba_base_address;
+  uintptr_t hba_base_address = (abar_word & FIELD_MASK(28, 4));
+  volatile HBAMemory *hba = (HBAMemory *)hba_base_address;
+
+	kprintf("abar %x, ", abar_word);
+	kprintf("BOHC %x, ", hba->bohc);
+	kprintf("CAP %x, ", hba->capabilities);
+	kprintf("GHC %x, ", hba->ghc);
+
+  uint32_t ahci_only_mask = FIELD_MASK(1, 18);
+  if ((hba->capabilities & ahci_only_mask) == 0)
+{
+	kprintf("wait for ahci enable... ");
+
+	// AHCI mode must be enabled before accessing any registers
+	for (int i = 0; i < 5; i++) {
+		if ((hba->ghc & (1 << 31)) == 0)
+			hba->ghc |= (1 << 31);
+	}
+}
+	hba->interrupt_status = ALL_ONES;
 
   uint16_t major_version = field_in_word(hba->version, 2, 2);
   uint16_t minor_version = field_in_word(hba->version, 1, 1);
+kprintf("AHCI v%d.%d %s\n", major_version, minor_version, 
+	(major_version == 1 && minor_version <= 0x0301) ? "" : "not supported!");
   assert(major_version == 1 &&
-         minor_version <=
-             3);  // We only know how to deal with ACHI version 1.0 - 1.3
+         minor_version <= 0x0301);  // We only know how to deal with ACHI version 1.0 - 1.3.1
 
-// Supports Staggered Spin-up (SSS)
+	// Supports Staggered Spin-up (SSS)
 	if (hba->capabilities & (1 << 27))
 		assert(reset_hba(hba));
-	else {
+	else
 		kprintf("not support CAP.SSS\n");
-//reset_hba(hba);
-//hba->vendor[0x18] |= 0x2;
-}
-	//kprintf("CAP.NP %d\n", hba->capabilities & 0xF); // max ports
-hba->ghc |= 2; // enable interrupt
-	kprintf("GHC %x", hba->ghc);
-	//kprintf("PxIE %x\n", hba->vendor[0x14]); //  PxIE ¨C Port x Interrupt Enable
-hba->vendor[0x14] |= 0x1F;
-hba->vendor[0x12] |= 0x1F;
-hba->ghc |= 2;
-	//kprintf("PxIE %x\n", hba->vendor[0x14]); //  PxIE ¨C Port x Interrupt Enable
-//hba->ghc |= 2;
+
+	hba->ghc |= 2; // enable interrupt
+	kprintf("GHC %x, ", hba->ghc);
 	//kprintf("GHC.IE %d\n", hba->ghc & 0x2); // Interrupt Enabled
-	//kprintf("PxCMD.SUD %d\n", hba->vendor[0x18]); // Spin-Up Device
 
   // TODO: We should free this somewhere
   driver->driver_data = kcalloc(1, sizeof(AHCIData));
@@ -526,7 +564,12 @@ static PCIDeviceDriverError ahci_execute_command(
 
 static void ahci_isr(PCIDeviceDriver *driver) {
   AHCIData *ahci_data = (AHCIData *)driver->driver_data;
-  if (ahci_data->hba->interrupt_status == 0) return;
+  if (!ahci_data || !ahci_data->hba )
+	return;
+  if (ahci_data->hba->interrupt_status == 0)
+	return;
+
+  //kprintf("ahci_isr hba.ints%x ", ahci_data->hba->interrupt_status);
 
   // TODO: Only loop over ports with bits set in hba->interrupt_status
   for (size_t i = 0; i < ahci_data->num_devices; ++i) {
@@ -534,9 +577,11 @@ static void ahci_isr(PCIDeviceDriver *driver) {
     HBAPort *port = port_from_device(device);
 
     if (port->interrupt_status > 0) {
+		//kprintf(" port %d int%x st%x sUP%x,", i, port->interrupt_status, port->sata_status, &device->pending_command);
       semaphore_up(&device->pending_command, 1);
       // Clear port interrupt status
       port->interrupt_status = ALL_ONES;
+		port->sata_error = ALL_ONES;
     }
   }
 

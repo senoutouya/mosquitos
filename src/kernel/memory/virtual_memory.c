@@ -109,8 +109,8 @@ static void setup_free_memory() {
 
     // If the type of the chunk is usable now, add it to the free list
     EFI_MEMORY_TYPE type = descriptor->Type;
-    if (type == EfiLoaderCode || type == EfiBootServicesCode ||
-        type == EfiBootServicesData ||
+    if (/*type == EfiLoaderCode || type == EfiBootServicesCode ||
+        type == EfiBootServicesData ||*/
         type == EfiConventionalMemory) {  // Types of free memory after boot
                                           // services are exited
       if (descriptor->PhysicalStart < 0x100000) {
@@ -118,6 +118,8 @@ static void setup_free_memory() {
         // TODO: Fix this, some of this memory (i.e., page 1) is used for things
         // that we don't know about
       }
+
+      kprintf("start %x num %u, ", descriptor->PhysicalStart, descriptor->NumberOfPages);
       vm_add_to_free_list(descriptor->PhysicalStart, descriptor->NumberOfPages);
       virtual_memory_data.num_free_pages += descriptor->NumberOfPages;
     }

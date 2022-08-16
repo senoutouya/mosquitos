@@ -80,9 +80,15 @@ static PCIDeviceDriverError sata_identify(PCIDeviceDriver *ahci_driver,
                                           : PCI_ERROR_DEVICE_ERROR;
 }
 
+
+int g_dma_buf_idx = 0;
+uint16_t* g_dma_buf[200] = { 0 };
 PCIDeviceDriverError sata_fill_device_info(PCIDeviceDriver *ahci_driver,
                                            AHCIDevice *device) {
-  uint16_t buffer[256];
+  //uint16_t buffer[256];
+    uint16_t* buffer = kmalloc(256 * 2);
+memset(buffer, 0, 256*2);
+    g_dma_buf[g_dma_buf_idx++] = buffer;
 
   PCIDeviceDriverError error = sata_identify(ahci_driver, device, buffer);
   if (error != PCI_ERROR_NONE) {
@@ -98,7 +104,7 @@ PCIDeviceDriverError sata_fill_device_info(PCIDeviceDriver *ahci_driver,
                             (uint8_t *)device_info->model_number);
   ahci_copy_identify_string(buffer, 176, 60,
                             (uint8_t *)device_info->media_serial_number);
-
+kprintf("IDENTITY %s, ", device_info->firmware_revision);
   uint16_t sector_size_info = buffer[106];
   if ((sector_size_info & (1 << 14)) != 0 &&  // Must be 1
       (sector_size_info & (1 << 15)) == 0 &&  // Must be 0

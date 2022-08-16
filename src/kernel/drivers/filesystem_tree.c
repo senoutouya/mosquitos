@@ -24,18 +24,56 @@ static FilesystemError add_filesystem(const char *const filesystem_id,
   return new_filesystem->init(new_filesystem, initialization_data);
 }
 
+void print_pci_device(PCIDevice *device);
+
+void test_ata_ide_identity(int prog_if) {
+	bool found = false;
+  if (pci_find_device(0x01, 0x01, prog_if))
+	found = true;
+  else if (pci_find_device(0x01, 0x01, prog_if))
+	found = true;
+  else if (pci_find_device(0x01, 0x01, prog_if))
+	found = true;
+	if (found)
+	  kprintf("found IDE device CLS: 01:01:%X. TODO: driver\n", prog_if);
+	else
+		return;
+// TODO: crash io_write_8(0x1F7, 0xEC); if no disk
+/*
+  // master IDE IDENTITY with ATA command
+  io_write_8(0x1F6, 0xA0);
+  io_write_8(0x1F2, 0);
+  io_write_8(0x1F3, 0);
+  io_write_8(0x1F4, 0);
+  io_write_8(0x1F5, 0);
+  io_write_8(0x1F7, 0xEC);
+
+  uint8_t status = io_read_8(0x1F7);
+if (status == 0)
+	kprintf("IDE master not exist\n");
+else
+{
+  while (status & 0x80)
+	  status = io_read_8(0x1F7);
+  kprintf("status %x ", status);
+  for (int i = 0; i < 256; ++i)
+  {
+	  uint16_t res = io_read_16(0x1F0);
+	  kprintf("%c%c", res >> 8, res & 0xFF);
+  }
+}
+*/
+}
+
 void filesystem_tree_init() {
   REQUIRE_MODULE("ahci");
   REQUIRE_MODULE("pci");
 
   fs_tree_data.num_filesystems = 0;
 
-  if (pci_find_device(0x01, 0x01, 0x80))
-	  kprintf("found IDE device. TODO: driver 80\n");
-  if (pci_find_device(0x01, 0x01, 0x8A))
-	  kprintf("found IDE device. TODO: driver 8a\n");
-  if (pci_find_device(0x01, 0x01, 0x8F))
-	  kprintf("found IDE device. TODO: driver 8f\n");
+	test_ata_ide_identity(0x80);
+	test_ata_ide_identity(0x8A);
+	test_ata_ide_identity(0x8F);
 
   PCIDevice *device = pci_find_device(0x01, 0x06, 0x01);
   if (device == NULL || !device->has_driver) {
@@ -57,7 +95,8 @@ void filesystem_tree_init() {
                                 sizeof(info_request), &info, sizeof(info));
     assert(ahci_error == PCI_ERROR_NONE);
 
-    kprintf("ahci %d %s,%s,%s,%s %x %x\n", info.device_type, info.serial_number, info.firmware_revision, info.media_serial_number, info.model_number, info.logical_sector_size, info.num_sectors);
+    kprintf("ahci type%d %s,%s,%s,%s %x %x\n", info.device_type, info.serial_number, info.firmware_revision,
+	info.media_serial_number, info.model_number, info.logical_sector_size, info.num_sectors);
     if (info.device_type == AHCI_DEVICE_SATA) {
       const MFSSATAInitData initialization_data = {.driver = driver,
                                                    .device_id = i};
