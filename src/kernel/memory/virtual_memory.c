@@ -109,6 +109,7 @@ static void setup_free_memory() {
 
     // If the type of the chunk is usable now, add it to the free list
     EFI_MEMORY_TYPE type = descriptor->Type;
+    // TODO: reuse Efi mems will crash on bare metal
     if (/*type == EfiLoaderCode || type == EfiBootServicesCode ||
         type == EfiBootServicesData ||*/
         type == EfiConventionalMemory) {  // Types of free memory after boot
@@ -119,7 +120,7 @@ static void setup_free_memory() {
         // that we don't know about
       }
 
-      kprintf("start %x num %u, ", descriptor->PhysicalStart, descriptor->NumberOfPages);
+      kprintf("PhysMem %x*%upages, ", descriptor->PhysicalStart, descriptor->NumberOfPages);
       vm_add_to_free_list(descriptor->PhysicalStart, descriptor->NumberOfPages);
       virtual_memory_data.num_free_pages += descriptor->NumberOfPages;
     }
@@ -181,9 +182,11 @@ void *vm_palloc(uint64_t num_pages) {
   spinlock_acquire(&virtual_memory_data.spinlock);
 
   FreeBlock *chunk = (FreeBlock *)list_head(&virtual_memory_data.free_list);
-
+  kprintf("vm_palloc chunk%p want %up, ", chunk, num_pages);
   while (chunk) {
-    if (chunk->num_pages >= num_pages) break;
+	  kprintf("> chunk%p+%up, ", chunk, chunk->num_pages);
+    if (chunk->num_pages >= num_pages)
+        break;
     chunk = (FreeBlock *)list_next(&chunk->entry);
   }
 

@@ -66,8 +66,9 @@ FreeBlockHeader *kmalloc_increase_allocation(size_t num_bytes) {
   assert(num_pages * VM_PAGE_SIZE >= num_bytes);
   num_bytes = num_pages * VM_PAGE_SIZE;
 
-  uint8_t *new_chunk = vm_palloc(num_pages);
-  if (new_chunk == NULL) return NULL;
+  uint8_t* new_chunk = vm_palloc(num_pages);
+  if (new_chunk == NULL)
+      return NULL;
 
   // Place zero-length sentinel at the beginning of the new chunk
   BlockHeader *front_sentinel_header = (BlockHeader *)new_chunk;
@@ -136,8 +137,9 @@ void *kmalloc(size_t alloc_size) {
 
   // If we couldn't find a fit, request more memory and use that
   if (!chosen_header) {
-    chosen_header = kmalloc_increase_allocation(alloc_size);
-    if (!chosen_header) return NULL;
+	  chosen_header = kmalloc_increase_allocation(alloc_size);
+    if (!chosen_header)
+        return NULL;
   }
 
   // Amount of space necessary to make a new block with `alloc_size` available
@@ -170,7 +172,6 @@ void *kmalloc(size_t alloc_size) {
     block_footer(ret)->free = 0;
 
     list_remove(&kmalloc_data.free_list, &chosen_header->entry);
-
     return ret->user_data;
   }
 }

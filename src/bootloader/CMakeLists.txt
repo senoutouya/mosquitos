@@ -3,14 +3,14 @@ INCLUDE_DIRECTORIES(
     ${CMAKE_SOURCE_DIR}/src/common
     )
 
-set(LIBDIR "${CMAKE_SOURCE_DIR}/../gnu-efi-3.0.13/x86_64/gnuefi")
-set(EFI_CRT_OBJS "${LIBDIR}/crt0-efi-${ARCH}.o")
-set(EFI_LDS "${LIBDIR}/elf_${ARCH}_efi.lds")
+set(EFI_LIB "${EFI_DIR}/x86_64/gnuefi")
+set(EFI_CRT_OBJS "${EFI_LIB}/crt0-efi-${ARCH}.o")
+set(EFI_LDS "${EFI_LIB}/elf_${ARCH}_efi.lds")
 
 SET(CMAKE_C_FLAGS         "${CMAKE_C_FLAGS} -fno-stack-protector -fshort-wchar -fPIC")
 
 SET(CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} \
-  -nostdlib -nodefaultlibs -znocombreloc -T ${EFI_LDS} -shared -Wl,-Bsymbolic -L ${LIBDIR} ${EFI_CRT_OBJS} -v")
+  -nostdlib -nodefaultlibs -znocombreloc -T ${EFI_LDS} -shared -Wl,-Bsymbolic -L ${EFI_LIB} ${EFI_CRT_OBJS} -v")
 
 file(GLOB_RECURSE bootloader_srcs ${CMAKE_CURRENT_SOURCE_DIR}/*.c )
 

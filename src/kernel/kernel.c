@@ -37,130 +37,123 @@
 
 #include <common/build_info.h>
 
-void *kernel_main_thread();
+void* kernel_main_thread();
 
 Lock kernel_lock;
 
-static void ide_isr() {
-    kprintf("ide_isr ");
-}
 
 // Pre-threaded initialization is done here
 void kernel_main(KernelInfo info) {
-  // Disable interrupts as we have no way to handle them now
-  cli();
+	// Disable interrupts as we have no way to handle them now
+	cli();
 
-  module_manager_init();
+	module_manager_init();
 
-  serial_port_init();
+	serial_port_init();
 
-  graphics_init(info.gop);
-  text_output_init();
-  text_output_set_background_color(0x00000000);
+	graphics_init(info.gop);
+	text_output_init();
+	text_output_set_background_color(0x00000000);
 
-  text_output_clear_screen();
+	text_output_clear_screen();
 
-  text_output_set_foreground_color(0x0000FF00);
-  text_output_printf("MosquitOS -- A tiny, annoying operating system\n");
-  text_output_set_foreground_color(0x00FFFF00);
-  text_output_printf("Built from %s on %s\n\n", build_git_info, build_time);
-  text_output_set_foreground_color(0x00FFFFFF);
+	text_output_set_foreground_color(0x0000FF00);
+	text_output_printf("MosquitOS -- A tiny, annoying operating system\n");
+	text_output_set_foreground_color(0x00FFFF00);
+	text_output_printf("Built from %s on %s\n\n", build_git_info, build_time);
+	text_output_set_foreground_color(0x00FFFFFF);
 
-  lock_init(&kernel_lock);
+	lock_init(&kernel_lock);
 
-  // Initialize subsystems
-  cpuid_init();
-  acpi_init(info.xdsp_address);
-  gdt_init();
-  apic_init();
-  interrupt_init();
-  exception_init();
+	// Initialize subsystems
+	cpuid_init();
+	acpi_init(info.xdsp_address);
+	gdt_init();
+	apic_init();
+	interrupt_init();
+	exception_init();
 
-  // Now that interrupt/exception handlers are set up, we can enable interrupts
-  sti();
+	// Now that interrupt/exception handlers are set up, we can enable interrupts
+	sti();
 
-  // Set up the dynamic memory subsystem
-  vm_init(info.memory_map, info.mem_map_size, info.mem_map_descriptor_size);
+	// Set up the dynamic memory subsystem
+	vm_init(info.memory_map, info.mem_map_size, info.mem_map_descriptor_size);
 
-  timer_init();
+	timer_init();
 
-  keyboard_controller_init();
+	keyboard_controller_init();
 
-  // Set up random numbers and start collecting entropy
-  random_init();
+	// Set up random numbers and start collecting entropy
+	random_init();
 
-  // Set up scheduler
-  scheduler_init();
+	// Set up scheduler
+	scheduler_init();
 
-// TODO
-  ioapic_map(14, IDE_IV, true, true);
-  interrupt_register_handler(IDE_IV, ide_isr);
+	KernelThread* main_thread = thread_create(kernel_main_thread, NULL, 31, 4);
+	thread_start(main_thread);
 
-  KernelThread *main_thread = thread_create(kernel_main_thread, NULL, 31, 4);
-  thread_start(main_thread);
+	// kernel_main will not execute any more after this call
+	scheduler_start_scheduling();
 
-  // kernel_main will not execute any more after this call
-  scheduler_start_scheduling();
-
-  assert(false);  // We should never get here
+	assert(false);  // We should never get here
 }
 
-void *keyboard_echo_thread() {
-  lock_acquire(&kernel_lock, -1);
-  text_output_printf("Starting keyboard_echo_thread.\n");
-  lock_release(&kernel_lock);
+void* keyboard_echo_thread() {
+	lock_acquire(&kernel_lock, -1);
+	text_output_printf("Starting keyboard_echo_thread.\n");
+	lock_release(&kernel_lock);
 
-  while (1) {
-    int c = keyboard_controller_read_char(false);
-    if (c >= 0) {
-      if (c == '\b' || c == 127) {
-        text_output_backspace();
-      } else {
-        uint32_t old_fg = text_output_get_foreground_color();
-        text_output_set_foreground_color(0x006666FF);
-        text_output_putchar(c);
-        text_output_set_foreground_color(old_fg);
-      }
-    }
-  }
+	while (1) {
+		int c = keyboard_controller_read_char(false);
+		if (c >= 0) {
+			if (c == '\b' || c == 127) {
+				text_output_backspace();
+			}
+			else {
+				uint32_t old_fg = text_output_get_foreground_color();
+				text_output_set_foreground_color(0x006666FF);
+				text_output_putchar(c);
+				text_output_set_foreground_color(old_fg);
+			}
+		}
+	}
 
-  return NULL;
+	return NULL;
 }
 
 // Initialization that needs a threaded context is done here
-void *kernel_main_thread() {
-  // Full acpica needs dynamic memory and scheduling
-  acpi_enable_acpica();
+void* kernel_main_thread() {
+	// Full acpica needs dynamic memory and scheduling
+	acpi_enable_acpica();
 
-  // PCI needs APCICA to determine IRQ mappings
-  pci_init();
+	// PCI needs APCICA to determine IRQ mappings
+	pci_init();
 
-  // Register PCI drivers
-  ahci_register();
+	// Register PCI drivers
+	ahci_register();
 
-  // Once we've registered the PCI drivers, enumerate and instantiate PCI
-  // drivers
-  pci_enumerate_devices();
+	// Once we've registered the PCI drivers, enumerate and instantiate PCI
+	// drivers
+	pci_enumerate_devices();
 
-  // Set up low-priority thread to echo keyboard to screen
-  KernelThread *keyboard_thread =
-      thread_create(keyboard_echo_thread, NULL, 1, 1);
-  thread_start(keyboard_thread);
+	// Set up low-priority thread to echo keyboard to screen
+	KernelThread* keyboard_thread =
+		thread_create(keyboard_echo_thread, NULL, 1, 1);
+	thread_start(keyboard_thread);
 
-  // Register filesystems
-  filesystem_init();
-  mfs_in_memory_register();
-  mfs_sata_register();
+	// Register filesystems
+	filesystem_init();
+	mfs_in_memory_register();
+	mfs_sata_register();
 
-  // Enumerate filesystems
-  filesystem_tree_init();
+	// Enumerate filesystems
+	filesystem_tree_init();
 
-  lock_acquire(&kernel_lock, -1);
-  text_output_set_foreground_color(0x0000FF00);
-  kprintf(
-      "\nKernel initialization complete. Exiting kernel_main_thread.\n\n");
-  text_output_set_foreground_color(0x00FFFFFF);
-  lock_release(&kernel_lock);
+	lock_acquire(&kernel_lock, -1);
+	text_output_set_foreground_color(0x0000FF00);
+	kprintf("\nKernel initialization complete. Exiting kernel_main_thread.\n\n");
+	text_output_set_foreground_color(0x00FFFFFF);
+	lock_release(&kernel_lock);
 
-  return NULL;
+	return NULL;
 }
